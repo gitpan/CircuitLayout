@@ -1,13 +1,14 @@
 require 5.006;
-use strict;
-our $VERSION = '0.04'; 
+our $VERSION = '0.05'; 
+## Note: '@ ( # )' used by the what command  E.g. what CircuitLayout.pm
+our $revision = '@(#) $RCSfile: CircuitLayout.pm,v $ $Revision: 1.30 $ $Date: 2003-08-01 00:19:14-05 $';
 use Math::Trig;
-use Tk;
+#use Tk;
 use Tk::WorldCanvas;
+use strict;
 
-## Note: '@ ( # )' used by the what command  E.g. what Tk-CircuitLayout.pm
-our $revision = '@(#) $RCSfile: Tk-CircuitLayout.pm,v $ $Revision: 1.1 $ $Date: 2003-04-11 15:07:29-05 $';
 our $G_epsilon = 0.00000001;
+my $pp = 4;
 
 # POD documentation is sprinkled throughout the file in an 
 # attempt at Literate Programming style (which Perl partly supports ...
@@ -26,11 +27,12 @@ our $G_epsilon = 0.00000001;
 # 
 
 =pod
-=head1 NAME
+
+=head1 NAME 
 
 CircuitLayout - circuit layout module
 
-=head1 Description
+=head1 DESCRIPTION
 
 This is CircuitLayout, a module for working with circuit layout items 
 like boundaries, texts, rectangles, and srefs.
@@ -38,6 +40,85 @@ like boundaries, texts, rectangles, and srefs.
 Send feedback/suggestions to Schumack@cpan.org
 
 =cut
+
+package CircuitLayout;
+{
+
+=head1 CircuitLayout::pitches
+
+returns string of pitches given a ref to an array of CircuitLayout::Boundary items
+
+=cut
+
+####### CircuitLayout::Text
+sub pitches
+{
+    my(%arg) = @_;
+    my $direction = $arg{'-direction'};
+    if (! defined $direction)
+    {
+        print "WARNING: missing -direction arg to pitches, using 'y'\n";
+        $direction = 'y';
+    }
+    $direction = lc $direction;
+    my $boundaryRefs = $arg{'-boundaries'};
+    if (defined($boundaryRefs))
+    {
+        my $firstItem = $$boundaryRefs[0];
+        if (ref($firstItem) ne 'CircuitLayout::Boundary')
+        {
+            die "-boundaries expects ref to CircuitLayout::Boundary items array. $!";
+        }
+    }
+    my $giveTransitionPoints = $arg{'-giveTransitionPoints'};
+    $giveTransitionPoints = 0 if (! defined $giveTransitionPoints);
+
+    my %locations=();
+    foreach my $polygon (@$boundaryRefs)
+    {
+        my $x = $polygon -> extent -> center -> x;
+        my $y = $polygon -> extent -> center -> y;
+        if ($direction eq 'x')
+        {
+            $locations{$y} .= "$x " if ((! defined $locations{$y}) || ($locations{$y} !~ m/\b$x /));
+        }
+        else
+        {
+            $locations{$x} .= "$y " if ((! defined $locations{$x}) || ($locations{$x} !~ m/\b$y /));
+        }
+    }
+    my $pitches = '';
+    my @transitionPointsArray = ();
+    foreach my $location (sort {$a <=> $b} keys %locations)
+    {
+        my @centers = split(' ',$locations{$location});
+        my $lastCenter = '';
+        foreach my $center (sort {$a <=> $b} @centers)
+        {
+            if ($lastCenter ne '')
+            {
+                my $pitch = sprintf("%0.${pp}f",$center - $lastCenter);
+                if ($pitches !~ m/\b$pitch /)
+                {
+                    $pitches .= "$pitch ";
+                    push @transitionPointsArray, $lastCenter;
+                }
+            }
+            $lastCenter = $center;
+        }
+    }
+    $pitches =~ s/ $//;
+    if (($pitches =~ m/ /) && $giveTransitionPoints)
+    {
+        shift @transitionPointsArray; ## 1st one is not wanted
+        my $transitionPoints = join(' ;',@transitionPointsArray);
+        $pitches .= ";$transitionPoints";
+    }
+    $pitches =~ s/ $//;
+    $pitches;
+}
+1;
+}
 
 package CircuitLayout::Text;
 {
@@ -59,6 +140,7 @@ my $edge = new CircuitLayout::Edge(-origin=>\@point,
                     -string=>"VDD");
 
 =cut
+
 #### Method: new CircuitLayout::Text
 sub new
 {
@@ -106,6 +188,7 @@ sub new
 draws on a worldCanvas
 
 =cut
+
 ####### CircuitLayout::Text
 sub display
 {
@@ -135,6 +218,18 @@ sub display
     }
 
     my $layer = $self -> {'Layer'};
+    my $name = $arg{'-name'};
+    if (! defined $name)
+    {
+        $name = "layer $layer";
+    }
+
+    my $visible = $arg{'-visible'};
+    if (! defined $visible)
+    {
+        $visible = 'true';
+    }
+
     my $type = 'text';
     my $string = $self -> {'String'};
 
@@ -148,7 +243,10 @@ sub display
                       "fill=$fillColor",
                       "layer=$layer",
                       'layout=true',
+                      "name=$name",
+                      'selected=false',
                       "type=$type",
+                      "visible=$visible",
                      ],
         -text     => "$string",
     );
@@ -163,6 +261,8 @@ sub display
         push @textOriginPoints,$x + $halfSize; push @textOriginPoints,$y;
         push @textOriginPoints,$x            ; push @textOriginPoints,$y - $halfSize;
         push @textOriginPoints,$x - $halfSize; push @textOriginPoints,$y;
+        my $fillTagColor = '';
+        $fillTagColor = $fill if (defined $fill);
         $canvas -> createLine(
             @textOriginPoints,
             -fill     => $fill,
@@ -170,21 +270,47 @@ sub display
             -capstyle => 'butt',
             -stipple  => '',
             -tags     => [
-                          "fill=$fill",
+                          "fill=$fillTagColor",
                           'layout=false',
                           'type=textorigin',
+                          'selected=false',
+                          "visible=$visible",
                          ],
         );
     }
 }
 ################################################################
 
+=head1 CircuitLayout::Text::directionExtent
+
+=cut
+
+####### CircuitLayout::Text
+sub directionExtent
+{
+    my ($self,%arg) = @_;
+    my $side = $arg{'-direction'};  # 'N' 'S' 'E' or 'W' ...
+    $side =~ s|^(.).*|\U$1|;
+    my ($x1,$x2,$y1,$y2);
+    my $num;
+
+    if (($side eq 'N') || ($side eq 'S'))
+    {
+        $num = $self -> origin -> y;
+    }
+    else
+    {
+        $num = $self -> origin -> x;
+    }
+}
+################################################################
 
 =head1 CircuitLayout::Text::printPrecision
 
 returns precision (integer)
 
 =cut
+
 ####### CircuitLayout::Text
 sub printPrecision
 {
@@ -201,6 +327,7 @@ sub printPrecision
 =head1 CircuitLayout::Text::string
 
 =cut
+
 ####### CircuitLayout::Text
 sub string
 {
@@ -217,6 +344,7 @@ sub string
 =head1 CircuitLayout::Text::layer
 
 =cut
+
 ####### CircuitLayout::Text
 sub layer
 {
@@ -236,6 +364,7 @@ returns origin as Coord object
 use -value to change and pass in Coord or x,y array
 
 =cut
+
 ####### CircuitLayout::Text
 sub origin
 {
@@ -274,6 +403,7 @@ use overload '=='       => \&equals,
 =head1 CircuitLayout::Coord::new
 
 =cut
+
 #### Method: new CircuitLayout::Coord
 sub new
 {
@@ -314,6 +444,7 @@ sub directionExtent
 returns precision (integer)
 
 =cut
+
 ####### CircuitLayout::Coord
 sub printPrecision
 {
@@ -330,6 +461,7 @@ sub printPrecision
 =head1 CircuitLayout::Coord::coordSubtract
 
 =cut
+
 ####### CircuitLayout::Coord
 sub coordSubtract($$$)
 {
@@ -348,6 +480,7 @@ sub coordSubtract($$$)
 =head1 CircuitLayout::Coord::onGrid
 
 =cut
+
 ####### CircuitLayout::Coord
 sub isOnGrid
 {
@@ -387,6 +520,7 @@ sub isOnGrid
 =head1 CircuitLayout::Coord::resolution
 
 =cut
+
 ####### CircuitLayout::Coord
 sub resolution
 {
@@ -398,6 +532,7 @@ sub resolution
 =head1 CircuitLayout::Coord::x
 
 =cut
+
 ####### CircuitLayout::Coord
 sub x
 {
@@ -409,6 +544,7 @@ sub x
 =head1 CircuitLayout::Coord::y
 
 =cut
+
 ####### CircuitLayout::Coord
 sub y
 {
@@ -420,6 +556,7 @@ sub y
 =head1 CircuitLayout::Coord::scale
 
 =cut
+
 ####### CircuitLayout::Coord
 sub scale
 {
@@ -465,6 +602,7 @@ sub scale
 =head1 CircuitLayout::Coord::snapNum
 
 =cut
+
 ####### CircuitLayout::Coord
 sub snapNum($$$)
 {
@@ -496,7 +634,7 @@ sub snapNum($$$)
 }
 ################################################################
         
-=head1 CircuitLayout::Coord::printableCoord
+=head1 CircuitLayout::Coord::printableCoords
 
 returns string in "x1,y1"
 where x and y print precision is controlled by objects printPrecision
@@ -505,6 +643,7 @@ Note: returns just one coordinate but method name
 is plural none the less to be consistant with other methods.
 
 =cut
+
 ####### Coord
 sub printableCoords
 {
@@ -517,6 +656,7 @@ sub printableCoords
 =head1 CircuitLayout::Coord::equals
 
 =cut
+
 
 ####### CircuitLayout::Coord::equals
 sub equals
@@ -579,6 +719,7 @@ my $edge = new CircuitLayout::Edge(-startCoord=>\@startPoint,
                     -endCoord=>[2.3,4.5]);
 
 =cut
+
 #### Method: new CircuitLayout::Edge
 sub new
 {
@@ -621,6 +762,7 @@ sub new
 =head1 CircuitLayout::Edge::coords
 
 =cut
+
 ####### CircuitLayout::Edge
 sub coords
 {
@@ -636,6 +778,7 @@ sub coords
 returns precision (integer)
 
 =cut
+
 ####### CircuitLayout::Edge
 sub printPrecision
 {
@@ -658,6 +801,7 @@ my $isLeft = $edge -> isLeft(-coord=>$coord);
 =head2 Synopsis:
 
 =cut
+
 ####### CircuitLayout::Edge
 sub isLeft
 {
@@ -701,6 +845,7 @@ S<my $edge = new CircuitLayout::Edge(-startCoord=E<gt>[0,0],-endCoord=E<gt>[5,5]
 S<print $edge -E<gt> direction; >## prints 'NE';
 
 =cut
+
 ####### CircuitLayout::Edge
 sub direction
 {
@@ -748,6 +893,7 @@ S<my $edge = new CircuitLayout::Edge(-startCoord=E<gt>[0,0],-endCoord=E<gt>[5,5]
 S<print $edge -E<gt> is45multiple; >## prints 1;
 
 =cut
+
 ####### CircuitLayout::Edge
 sub is45multiple
 {
@@ -774,6 +920,7 @@ Returns x value where CircuitLayout::Edge actually crosses x axis
 or would cross if it was extended.
 
 =cut
+
 ####### CircuitLayout::Edge
 sub xIntersection
 {
@@ -798,6 +945,7 @@ $edge -> straddleTouchXray(-yValue=>4.3);
 
 
 =cut
+
 ####### CircuitLayout::Edge
 sub straddleTouchXray
 {
@@ -823,6 +971,7 @@ Returns CircuitLayout::Edge as 'x1,y1;x2,y2' string.
 print $edge -> printableCoords;
 
 =cut
+
 ####### CircuitLayout::Edge
 sub printableCoords
 {
@@ -836,6 +985,7 @@ sub printableCoords
 Returns 1st edge coordinate as a Coord.
 
 =cut
+
 ####### CircuitLayout::Edge
 sub startCoord
 {
@@ -849,6 +999,7 @@ sub startCoord
 Returns last edge coordinate as a Coord.
 
 =cut
+
 ####### CircuitLayout::Edge
 sub endCoord
 {
@@ -872,6 +1023,7 @@ S<my $edge = new CircuitLayout::Edge(-startCoord=E<gt>[0,0],-endCoord=E<gt>[0,5]
 S<print $edge -E<gt> directionExtent(-direction=E<gt>'N'); >## prints 5;
 
 =cut
+
 ####### CircuitLayout::Edge Coord Boundary
 sub directionExtent
 {
@@ -975,6 +1127,7 @@ S<my $edge = new CircuitLayout::Edge(-startCoord=E<gt>[0,1],-endCoord=E<gt>[0,5]
 S<print $edge -E<gt> length(); >## prints 4;
 
 =cut
+
 ####### CircuitLayout::Edge
 sub length
 {
@@ -1012,6 +1165,7 @@ S<my $edge = new CircuitLayout::Edge(-startCoord=E<gt>[0,1],-endCoord=E<gt>[0,5]
 S<print $edge -E<gt> lengthAtExtent(-direction=E<gt>'N'); >## prints 4;
 
 =cut
+
 ####### CircuitLayout::Edge
 sub lengthAtExtent
 {
@@ -1080,6 +1234,7 @@ print 'inside == true' if ($edge -> inside(-coord => $coord);
 Returns 0 | 1 depending on whether coord is inside of edge
 
 =cut
+
 ####### CircuitLayout::Edge
 sub inside
 {
@@ -1137,6 +1292,7 @@ use overload '=='       => \&equals,
 my $path = new CircuitLayout::Path(
 
 =cut
+
 #### Method: new CircuitLayout::Path
 sub new
 {
@@ -1294,6 +1450,7 @@ sub new
 draws on a worldCanvas
 
 =cut
+
 ####### CircuitLayout::Path
 sub display
 {
@@ -1327,6 +1484,19 @@ sub display
     }
 
     my $layer = $self -> {'Layer'};
+
+    my $name = $arg{'-name'};
+    if (! defined $name)
+    {
+        $name = "layer $layer";
+    }
+
+    my $visible = $arg{'-visible'};
+    if (! defined $visible)
+    {
+        $visible = 'true';
+    }
+
     my $width = $self -> {'Width'};
     my $type = 'path';
 
@@ -1343,7 +1513,11 @@ sub display
                       "fill=$fill",
                       "layer=$layer",
                       'layout=true',
+                      "name=$name",
+                      'selected=false',
+                      "stipple=$stippleFile",
                       "type=$type",
+                      "visible=$visible",
                      ],
     );
 }
@@ -1380,6 +1554,7 @@ my $rect = new CircuitLayout::Rectangle(-llCoord=>\@llPoint,
                          -urCoord=>[2.3,4.5]);
 
 =cut
+
 #### Method: new CircuitLayout::Rectangle
 sub new
 {
@@ -1432,6 +1607,7 @@ sub new
 =head1 CircuitLayout::Rectangle::center
 
 =cut
+
 ####### CircuitLayout::Rectangle
 sub center
 {
@@ -1452,6 +1628,7 @@ sub center
 =head1 CircuitLayout::Rectangle::edges
 
 =cut
+
 ####### CircuitLayout::Rectangle
 sub edges
 {
@@ -1467,6 +1644,7 @@ sub edges
 returns precision (integer)
 
 =cut
+
 ####### CircuitLayout::Rectangle
 sub printPrecision
 {
@@ -1488,6 +1666,7 @@ where x and y print precision is controlled by objects printPrecision
 Note: x1,y1 is lower left
 
 =cut
+
 ####### CircuitLayout::Rectangle
 sub printableCoords
 {
@@ -1504,6 +1683,7 @@ sub printableCoords
 =head1 CircuitLayout::Rectangle::add
 
 =cut
+
 ####### CircuitLayout::Rectangle
 sub add
 {
@@ -1552,6 +1732,7 @@ sub add
 =head1 CircuitLayout::Rectangle::extent
 
 =cut
+
 ####### CircuitLayout::Rectangle
 sub extent
 {
@@ -1569,6 +1750,7 @@ my $rect = new CircuitLayout::Rectangle(...);
 print "is (4,6) inside ? ... ",$rect -> inside(-coord=>[4,6]);
 
 =cut
+
 sub inside
 {
     my($self,%arg) = @_;
@@ -1610,6 +1792,7 @@ my $rect = new CircuitLayout::Rectangle(...);
 print "is (4,6) interiorTo ? ... ",$rect -> interiorTo(-coord=>[4,6]);
 
 =cut
+
 sub interiorTo
 {
     my($self,%arg) = @_;
@@ -1664,6 +1847,7 @@ use overload '+'        => \&append,
   my $boundary  = new CircuitLayout::Boundary(-coords=>\$coords) 
 
 =cut
+
 #### Method: new CircuitLayout::Boundary
 sub new
 {
@@ -1808,6 +1992,7 @@ sub new
 draws on a worldCanvas
 
 =cut
+
 ####### CircuitLayout::Boundary
 sub display
 {
@@ -1853,8 +2038,19 @@ sub display
     }
 
     my $layer = $self -> {'Layer'};
-    my $type = 'boundary';
+    my $name = $arg{'-name'};
+    if (! defined $name)
+    {
+        $name = "layer $layer";
+    }
 
+    my $visible = $arg{'-visible'};
+    if (! defined $visible)
+    {
+        $visible = 'true';
+    }
+
+    my $type = 'boundary';
     my @points = @{$self -> {'XYs'}};
     $canvas -> createPolygon(
         @points,
@@ -1865,8 +2061,12 @@ sub display
                       "fill=$fillColor",
                       "layer=$layer",
                       'layout=true',
+                      "name=$name",
                       "outline=$outlineColor",
+                      'selected=false',
+                      "stipple=$stippleFile",
                       "type=$type",
+                      "visible=$visible",
                      ],
     );
 }
@@ -1877,6 +2077,7 @@ sub display
 returns precision (integer)
 
 =cut
+
 ####### CircuitLayout::Boundary
 sub printPrecision
 {
@@ -1893,6 +2094,7 @@ sub printPrecision
 =head1 CircuitLayout::Boundary::isRectangle
 
 =cut
+
 ####### CircuitLayout::Boundary
 sub isRectangle
 {
@@ -1908,6 +2110,7 @@ sub isRectangle
 =head1 CircuitLayout::Boundary::extent
 
 =cut
+
 ####### CircuitLayout::Boundary
 sub extent
 {
@@ -1976,6 +2179,7 @@ sub extent
 =head1 CircuitLayout::Boundary::layer
 
 =cut
+
 ####### CircuitLayout::Boundary
 sub layer
 {
@@ -1993,6 +2197,7 @@ sub layer
 =head1 CircuitLayout::Boundary::dataType
 
 =cut
+
 ####### CircuitLayout::Boundary
 sub dataType
 {
@@ -2009,6 +2214,7 @@ sub dataType
 =head1 CircuitLayout::Boundary::property
 
 =cut
+
 ####### CircuitLayout::Boundary
 sub property
 {
@@ -2025,6 +2231,7 @@ sub property
 =head1 CircuitLayout::Boundary::node
 
 =cut
+
 ####### CircuitLayout::Boundary
 sub node
 {
@@ -2041,6 +2248,7 @@ sub node
 =head1 CircuitLayout::Boundary::net
 
 =cut
+
 ####### CircuitLayout::Boundary
 sub net
 {
@@ -2057,6 +2265,7 @@ sub net
 =head1 CircuitLayout::Boundary::group
 
 =cut
+
 ####### CircuitLayout::Boundary
 sub group
 {
@@ -2073,6 +2282,7 @@ sub group
 =head1 CircuitLayout::Boundary::nextCoord
 
 =cut
+
 ####### CircuitLayout::Boundary
 sub nextCoord
 {
@@ -2097,6 +2307,7 @@ returns string in "x1,y1;x2,y2;x...."
 where x and y print precision is controlled by objects printPrecision
 
 =cut
+
 ####### CircuitLayout::Boundary
 sub printableCoords
 {
@@ -2118,6 +2329,7 @@ sub printableCoords
 =head1 CircuitLayout::Boundary::nextEdge
 
 =cut
+
 ####### CircuitLayout::Boundary
 sub nextEdge
 {
@@ -2139,6 +2351,7 @@ sub nextEdge
 =head1 CircuitLayout::Boundary::append
 
 =cut
+
 ####### CircuitLayout::Boundary
 sub append
 {
@@ -2163,6 +2376,7 @@ sub append
 =head1 CircuitLayout::Boundary::numCoords
 
 =cut
+
 ####### CircuitLayout::Boundary
 sub numCoords
 {
@@ -2174,6 +2388,7 @@ sub numCoords
 =head1 CircuitLayout::Boundary::xys
 
 =cut
+
 ####### CircuitLayout::Boundary
 sub xys
 {
@@ -2187,6 +2402,7 @@ sub xys
 =head1 CircuitLayout::Boundary::coords
 
 =cut
+
 ####### CircuitLayout::Boundary
 sub coords
 {
@@ -2200,6 +2416,7 @@ sub coords
 =head1 CircuitLayout::Boundary::edges
 
 =cut
+
 ####### CircuitLayout::Boundary
 sub edges
 {
@@ -2215,6 +2432,7 @@ sub edges
 returns self (already a Boundary)
 
 =cut
+
 ####### CircuitLayout::Boundary
 sub boundaryOutline
 {
@@ -2234,6 +2452,7 @@ my $boundary = new CircuitLayout::Boundary(-xy=>\@xys);
 print "is (4,6) inside ? ... ",$boundary -> inside(-coord=>[4,6]);
 
 =cut
+
 sub inside_old
 {
     my($self,%arg) = @_;
@@ -2284,6 +2503,7 @@ my $boundary = new CircuitLayout::Boundary(-xy=>\@xys);
 print "is (4,6) inside ? ... ",$boundary -> inside(-coord=>[4,6]);
 
 =cut
+
 sub inside
 {
     my($self,%arg) = @_;
@@ -2340,6 +2560,7 @@ my $boundary = new CircuitLayout::Boundary(-xy=>\@xys);
 print "is (4,6) interiorTo ? ... ",$boundary -> interiorTo(-coord=>[4,6]);
 
 =cut
+
 sub interiorTo
 {
     my($self,%arg) = @_;
@@ -2389,6 +2610,7 @@ package CircuitLayout::Rectangle;
 =head1 CircuitLayout::Rectangle::ll
 
 =cut
+
 ####### CircuitLayout::Rectangle
 sub ll
 {
@@ -2400,6 +2622,7 @@ sub ll
 =head1 CircuitLayout::Rectangle::ur
 
 =cut
+
 ####### CircuitLayout::Rectangle
 sub ur
 {
@@ -2411,6 +2634,7 @@ sub ur
 =head1 CircuitLayout::Rectangle::layer
 
 =cut
+
 ####### CircuitLayout::Rectangle
 sub layer 
 {
@@ -2424,6 +2648,7 @@ sub layer
 returns Boundary representation of 2 point rectangle
 
 =cut
+
 ####### CircuitLayout::Rectangle
 sub boundaryOutline
 {
@@ -2481,6 +2706,7 @@ $CircuitLayout::Sref::DefaultClass = 'CircuitLayout::Sref' unless defined $Circu
   my $sref  = new CircuitLayout::Sref(-coords=>\$coords) 
 
 =cut
+
 #### Method: new CircuitLayout::Sref
 sub new
 {
@@ -2536,6 +2762,7 @@ returns name as "string"
 use -value to change and pass in string
 
 =cut
+
 ####### CircuitLayout::Sref
 sub name
 {
@@ -2555,6 +2782,7 @@ returns origin as Coord object
 use -value to change and pass in Coord or x,y array
 
 =cut
+
 ####### CircuitLayout::Sref
 sub origin
 {
@@ -2581,6 +2809,7 @@ sub origin
 returns precision (integer)
 
 =cut
+
 ####### CircuitLayout::Sref
 sub printPrecision
 {
@@ -2604,6 +2833,7 @@ Note: returns origin (which is just one coordinate) but method name
 is plural none the less to be consistant with other methods.
 
 =cut
+
 ####### CircuitLayout::Sref
 sub printableCoords
 {
@@ -2625,6 +2855,7 @@ $CircuitLayout::DefaultClass = 'CircuitLayout' unless defined $CircuitLayout::De
 =head1 CircuitLayout::version
 
 =cut
+
 sub version()
 {
     return $VERSION;
@@ -2634,6 +2865,7 @@ sub version()
 =head1 CircuitLayout::revision
 
 =cut
+
 sub revision()
 {
     return $revision;
@@ -2651,12 +2883,11 @@ sub distance
 ## end package CircuitLayout
 }
 
-
 __END__
 
 =head1 Examples
 
-=item example using GDS2 to read in binary GDS2 stream file.
+=head2 example using GDS2 to read in binary GDS2 stream file.
 
   #!/usr/local/bin/perl -w
   use strict;
@@ -2674,31 +2905,31 @@ __END__
   my %boundaries;
   while (my $record = $gds2File -> readGds2Record)
   {
-      $inBoundary=1 if($gds2File -> isBoundary);
-      $inBoundary=0 if($gds2File -> isEndel);
-      if ($inBoundary)
+    $inBoundary=1 if($gds2File -> isBoundary);
+    $inBoundary=0 if($gds2File -> isEndel);
+    if ($inBoundary)
+    {
+      $layerNum = $gds2File -> returnLayer if($gds2File -> isLayer);
+      if($gds2File -> isXy)
       {
-          $layerNum = $gds2File -> returnLayer if($gds2File -> isLayer);
-          if($gds2File -> isXy)
-          {
-              if (! defined $layerIndexCnt[$layerNum]) { $layerIndexCnt[$layerNum] = 0; }
-              my $layerIndex = $layerIndexCnt[$layerNum];
-              ## Use "my @xys" here to get unique memory location
-              my @xys = $gds2File ->  returnXyAsArray(-withClosure=>0,-asInteger=>0);
-              my $boundary = new CircuitLayout::Boundary(-xy=>\@xys,-layer=>$layerNum);
-              $boundaries{$layerNum}{$layerIndex} = \$boundary;
-              $layerIndexCnt[$layerNum]++;
-          }
+        if (! defined $layerIndexCnt[$layerNum]) { $layerIndexCnt[$layerNum] = 0; }
+        my $layerIndex = $layerIndexCnt[$layerNum];
+        ## Use "my @xys" here to get unique memory location
+        my @xys = $gds2File ->  returnXyAsArray(-withClosure=>0,-asInteger=>0);
+        my $boundary = new CircuitLayout::Boundary(-xy=>\@xys,-layer=>$layerNum);
+        $boundaries{$layerNum}{$layerIndex} = \$boundary;
+        $layerIndexCnt[$layerNum]++;
       }
+    }
   }
   my $boundary;
   foreach my $layer (sort {$a <=> $b} keys %boundaries)
   {
-      foreach my $x (keys %{$boundaries{$layer}})
-      {
-          $boundary = ${$boundaries{$layer}{$x}};
-          print $boundary -> layer,':',$boundary -> printableCoords;
-      }
+    foreach my $x (keys %{$boundaries{$layer}})
+    {
+      $boundary = ${$boundaries{$layer}{$x}};
+      print $boundary -> layer,':',$boundary -> printableCoords;
+    }
   }
   ################################################################################
 

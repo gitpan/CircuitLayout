@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name: CircuitLayout
-version: 0.04
+version: 0.05
 license: artistic
 distribution_type: module
 requires:
