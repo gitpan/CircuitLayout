@@ -1,11 +1,12 @@
 Revision history for Perl extension CircuitLayout.
-
-Makefile.PL created by h2xs 1.20 with options
-        -X -n CircuitLayout
         
 0.0.1  First cut
 
 0.0.2  ready for CPAN
 
 0.0.3  use Build instead of Make
+
+0.04   use Tk for display, changed version numbering to 
+       better work with build/cpanplus (#.#.# seems to wk 
+       well only for perl (e.g. 5.8.0)
 

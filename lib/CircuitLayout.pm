@@ -1,12 +1,12 @@
 require 5.006;
 use strict;
-our $VERSION = '0.0.3'; 
+our $VERSION = '0.04'; 
 use Math::Trig;
 use Tk;
 use Tk::WorldCanvas;
 
-## Note: '@ ( # )' used by the what command  E.g. what CircuitLayout.pm
-our $revision = '@(#) $RCSfile: CircuitLayout.pm,v $ $Revision: 1.21 $ $Date: 2003-04-11 15:07:29-05 $';
+## Note: '@ ( # )' used by the what command  E.g. what Tk-CircuitLayout.pm
+our $revision = '@(#) $RCSfile: Tk-CircuitLayout.pm,v $ $Revision: 1.1 $ $Date: 2003-04-11 15:07:29-05 $';
 our $G_epsilon = 0.00000001;
 
 # POD documentation is sprinkled throughout the file in an 
