@@ -10,3 +10,7 @@ Revision history for Perl extension CircuitLayout.
        better work with build/cpanplus (#.#.# seems to wk 
        well only for perl (e.g. 5.8.0)
 
+0.05   added pitches() for a DRC check I needed to do
+
+0.06   trying out Makefile.PL kludge to make CPAN happy
+

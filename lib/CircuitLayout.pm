@@ -1,5 +1,5 @@
 require 5.006;
-our $VERSION = '0.05'; 
+our $VERSION = '0.06'; 
 ## Note: '@ ( # )' used by the what command  E.g. what CircuitLayout.pm
 our $revision = '@(#) $RCSfile: CircuitLayout.pm,v $ $Revision: 1.30 $ $Date: 2003-08-01 00:19:14-05 $';
 use Math::Trig;

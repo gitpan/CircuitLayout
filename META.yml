@@ -1,8 +1,10 @@
 --- #YAML:1.0
 name: CircuitLayout
-version: 0.05
+version: 0.06
+author:
+  - ~
+abstract: circuit layout module
 license: artistic
-distribution_type: module
 requires:
   Math::Trig: 1.01
   Tk: 800.013
@@ -11,4 +13,29 @@ requires:
 recommends: {}
 build_requires: {}
 conflicts: {}
-generated_by: Module::Build version 0.16
+provides:
+  CircuitLayout:
+    file: lib/CircuitLayout.pm
+    version: 0.06
+  CircuitLayout::Boundary:
+    file: lib/CircuitLayout.pm
+    version: 0.06
+  CircuitLayout::Coord:
+    file: lib/CircuitLayout.pm
+    version: 0.06
+  CircuitLayout::Edge:
+    file: lib/CircuitLayout.pm
+    version: 0.06
+  CircuitLayout::Path:
+    file: lib/CircuitLayout.pm
+    version: 0.06
+  CircuitLayout::Rectangle:
+    file: lib/CircuitLayout.pm
+    version: 0.06
+  CircuitLayout::Sref:
+    file: lib/CircuitLayout.pm
+    version: 0.06
+  CircuitLayout::Text:
+    file: lib/CircuitLayout.pm
+    version: 0.06
+generated_by: Module::Build version 0.22

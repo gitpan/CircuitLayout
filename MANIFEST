@@ -6,8 +6,11 @@ Examples/inside
 Examples/overload
 Examples/rectangle
 INSTALL
+lib/CircuitLayout.pm
+Makefile.PL
 MANIFEST
 META.yml
 README
-lib/CircuitLayout.pm
 t/01load.t
+
+SIGNATURE    Added here by Module::Build
