@@ -1,5 +1,0 @@
-#!/usr/bin/perl -w
-use strict;
-$|++;
-print "Coming soon... a free tool to work with gdsii files\nWhat I have now can read and display gdsii files\nbut is too rough to release.\n";
-

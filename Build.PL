@@ -7,7 +7,6 @@ my $build = new Module::Build
 		perl => '5.6.0',
 		Tk => '800.013',
 		Tk::WorldCanvas => '1.2',
-		Math::Trig => '1.01',
 	},
     sign => 1,
 );

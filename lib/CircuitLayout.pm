@@ -1,8 +1,8 @@
 require 5.006;
-our $VERSION = '0.06'; 
+our $VERSION = '0.07'; 
 ## Note: '@ ( # )' used by the what command  E.g. what CircuitLayout.pm
 our $revision = '@(#) $RCSfile: CircuitLayout.pm,v $ $Revision: 1.30 $ $Date: 2003-08-01 00:19:14-05 $';
-use Math::Trig;
+#use Math::Trig;
 #use Tk;
 use Tk::WorldCanvas;
 use strict;
@@ -18,15 +18,17 @@ my $pp = 4;
 # You can run this file through either pod2man or pod2html to produce 
 # documentation in manual or html file format 
 
-# Author: Ken Schumack (c) 2001,2002,2003.  All rights reserved.
-# source code may be used and modified freely, but this copyright notice
-# must remain attached to the file.  You may modify this module as you 
-# wish, but if you create a modified version, please attach a note
-# listing the modifications you have made, and send a copy to me at 
-# Schumack@cpan.org
-# 
-
 =pod
+=head1 COPYRIGHT
+
+Author: Ken Schumack (c) 2001-2004. All rights reserved.
+This module is free software. It may be used, redistributed
+and/or modified under the terms of the Perl Artistic License.
+ (see http://www.perl.com/pub/a/language/misc/Artistic.html)
+I do ask that you please let me know if you find bugs or have
+idea for improvements. You can reach me at Schumack@cpan.org
+ Have fun, Ken
+
 
 =head1 NAME 
 
